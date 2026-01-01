@@ -1,6 +1,7 @@
 use std::collections::{hash_map::Entry, HashMap};
 use std::time::SystemTime;
 
+use crate::server::middleware::ValidatedJson;
 use crate::ActiveUser;
 use crate::UsersMap;
 use axum::{
@@ -9,6 +10,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct ResponseStatus<T> {
@@ -23,9 +25,11 @@ struct ActiveUserResponse {
     time_active: SystemTime,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Validate)]
 struct UserPostPayload {
+    #[validate(length(min = 3, message = "Name must be at least 3 characters"))]
     name: String,
+    #[validate(length(min = 10, message = "Invalid MAC address length"))]
     mac_address: String,
 }
 
@@ -35,10 +39,9 @@ async fn list_users(
     serialize_active_users(&users).await
 }
 
-// validate user payload -> add middleware
 async fn claim_device(
     State(users): State<UsersMap>,
-    Json(user_post_payload): Json<UserPostPayload>,
+    ValidatedJson(user_post_payload): ValidatedJson<UserPostPayload>,
 ) -> Json<ResponseStatus<String>> {
     let time_now: SystemTime = SystemTime::now();
     let verified_payload = ActiveUser {
