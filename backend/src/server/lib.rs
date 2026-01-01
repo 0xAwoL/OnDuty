@@ -121,3 +121,76 @@ async fn serialize_active_users(
         timestamp: None,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::Client;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+
+    #[tokio::test]
+    async fn test_claim_device_flow() {
+        let users: UsersMap = Arc::new(RwLock::new(HashMap::new()));
+        let (addr, _handle) = run_server_for_test(users.clone()).await;
+        let client = Client::new();
+        let url = format!("http://{}", addr);
+
+        // 1. Claim success
+        let resp = client
+            .post(format!("{}/claim_device", url))
+            .json(&serde_json::json!({
+                "name": "test_device",
+                "mac_address": "00:11:22:33:44:55"
+            }))
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_success());
+        let body: ResponseStatus<String> = resp.json().await.unwrap();
+        assert!(body.status);
+        assert_eq!(body.data, "ok");
+
+        // 2. Duplicate claim
+        let resp = client
+            .post(format!("{}/claim_device", url))
+            .json(&serde_json::json!({
+                "name": "test_device_2",
+                "mac_address": "00:11:22:33:44:55"
+            }))
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_success());
+        let body: ResponseStatus<String> = resp.json().await.unwrap();
+        assert!(!body.status);
+        assert_eq!(body.data, "Device already claimed");
+
+        // 3. Validation error (short name)
+        let resp = client
+            .post(format!("{}/claim_device", url))
+            .json(&serde_json::json!({
+                "name": "yo",
+                "mac_address": "00:11:22:33:44:55"
+            }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 400);
+
+        // 4. List users
+        let resp = client
+            .get(format!("{}/list_users/", url))
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_success());
+        let body: ResponseStatus<HashMap<String, ActiveUserResponse>> = resp.json().await.unwrap();
+        assert!(body.data.contains_key("00:11:22:33:44:55"));
+        // Original name should persist because duplicates are rejected
+        assert_eq!(
+            body.data.get("00:11:22:33:44:55").unwrap().name,
+            "test_device"
+        );
+    }
+}
