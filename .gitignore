@@ -1,0 +1,7 @@
+.vscode
+target/
+**/*.rs.bk
+Cargo.lock
+backend-ai
+.env
+.DS_Store
