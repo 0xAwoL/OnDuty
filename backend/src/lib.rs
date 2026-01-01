@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::{collections::HashMap, time::SystemTime};
 use tokio::sync::RwLock;
 
+pub mod network_monitor;
 pub mod server;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
