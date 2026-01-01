@@ -1,8 +1,6 @@
 use crate::UsersMap;
 use tokio::sync::mpsc;
 
-const KICK_TIME: std::time::Duration = std::time::Duration::from_secs(300);
-
 pub async fn monitor(users: UsersMap) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
 
@@ -25,6 +23,12 @@ pub async fn monitor(users: UsersMap) {
 }
 
 pub async fn update(tx: mpsc::Sender<String>, users: UsersMap) {
+    let kick_time_secs = std::env::var("KICK_TIME")
+        .unwrap_or_else(|_| "300".to_string())
+        .parse::<u64>()
+        .unwrap_or(300);
+    let kick_time = std::time::Duration::from_secs(kick_time_secs);
+
     loop {
         let users_guard = users.read().await;
 
@@ -32,7 +36,7 @@ pub async fn update(tx: mpsc::Sender<String>, users: UsersMap) {
         // Check for users eligible to be kicked
         for (k, v) in users_guard.iter() {
             if let Ok(elapsed) = v.last_seen.elapsed() {
-                if elapsed > KICK_TIME {
+                if elapsed > kick_time {
                     users_to_remove.push(k.to_string());
                     let _ = tx.send(format!("user {}, has been removed", k)).await;
                 }
